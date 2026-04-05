@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STG3 Steam Map Simulator — N57/C48-8.83/1.44 — PT Fajar Surya Wisesa</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'JetBrains Mono','Courier New',monospace;background:#f8f8f6;color:#222;padding:16px;max-width:960px;margin:0 auto}
+.title-bar{text-align:center;margin-bottom:12px}
+.title-bar h1{font-size:14px;font-weight:700;margin-bottom:2px}
+.title-bar p{font-size:9.5px;color:#888}
+.presets{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.presets button{padding:5px 9px;font-size:10px;font-family:inherit;border-radius:5px;cursor:pointer;line-height:1.3;text-align:center;background:#f0efea;border:1px solid #ccc;color:#666}
+.pe-tabs{display:flex;gap:0;margin-bottom:10px;border-radius:6px;overflow:hidden;border:1px solid #bbb}
+.pe-tabs button{flex:1;padding:8px 0;font-size:12px;font-family:inherit;cursor:pointer;border:none;background:#f0efea;color:#666;font-weight:500;transition:all .15s}
+.pe-tabs button.active{background:#2c3e50;color:#fff;font-weight:700}
+.chart-wrap{background:#fff;border:1px solid #ddd;border-radius:8px 8px 0 0;overflow:hidden}
+.cond-legend{display:flex;flex-wrap:wrap;gap:6px 14px;padding:8px 14px;background:#fafaf8;border:1px solid #ddd;border-top:none;border-radius:0 0 8px 8px}
+.cond-item{display:flex;align-items:center;gap:5px;font-size:10px;line-height:1.3}
+.cond-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.15)}
+.cond-label{font-weight:600}
+.cond-detail{color:#888;font-size:9px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.ctrl-box{border-radius:8px;padding:9px 12px}
+.ctrl-box label{font-size:10px;font-weight:600;display:block;margin-bottom:3px}
+.ctrl-box input[type=range]{width:100%;margin:3px 0}
+.ctrl-row{display:flex;align-items:center;gap:6px;margin-top:3px}
+.ctrl-row input[type=number]{width:68px;padding:3px 5px;font-size:13px;font-weight:600;font-family:inherit;border-radius:4px;text-align:center}
+.ctrl-row span{font-size:10px}
+.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px;margin-top:10px}
+.res-card{background:#f0efea;border-radius:7px;padding:7px 10px}
+.res-card .lbl{font-size:9px;color:#888;margin-bottom:1px}
+.res-card .val{font-size:18px;font-weight:700}
+.res-card .val span{font-size:11px;font-weight:500}
+.res-card .sub{font-size:8px;color:#aaa;margin-top:1px}
+.footer{font-size:8.5px;color:#aaa;margin-top:7px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="title-bar">
+  <h1>STG3 Extraction Condensing Turbine — Steam Consumption Diagram</h1>
+  <p>N57/C48-8.83/1.44 | Nanjing Turbine (Z58808.34/02) | PT Fajar Surya Wisesa 1×57 MW | Inlet: 8.83 MPa(a) / 535°C</p>
+</div>
+
+<div class="pe-tabs" id="peTabs">
+  <button onclick="setPe(1.24)">Pe = 1.24 MPa(a)</button>
+  <button onclick="setPe(1.44)" class="active">Pe = 1.44 MPa(a)</button>
+  <button onclick="setPe(1.64)">Pe = 1.64 MPa(a)</button>
+</div>
+
+<div class="presets" id="presets"></div>
+<div class="chart-wrap"><svg id="chart" viewBox="0 0 880 520" style="width:100%;display:block;cursor:crosshair"></svg></div>
+<div class="cond-legend" id="condLegend"></div>
+
+<div class="controls">
+  <div class="ctrl-box" style="background:#fdf2f2;border:1px solid #e6b0aa">
+    <label style="color:#922b21">Throttle steam inlet D₀</label>
+    <input type="range" id="throttleSlider" min="80" max="240" step="1" value="220" style="accent-color:#c0392b">
+    <div class="ctrl-row">
+      <input type="number" id="throttleNum" min="80" max="240" step="1" value="220" style="border:1px solid #e6b0aa;color:#922b21">
+      <span style="color:#922b21">t/h &nbsp; 8.83 MPa(a), 535°C</span>
+    </div>
+  </div>
+  <div class="ctrl-box" style="background:#fef9e7;border:1px solid #f0d27a">
+    <label style="color:#7d6608" id="extLabel">Industrial extraction Dₑ (max 95 t/h)</label>
+    <input type="range" id="extSlider" min="0" max="95" step="1" value="0" style="accent-color:#e67e22">
+    <div class="ctrl-row">
+      <input type="number" id="extNum" min="0" max="95" step="1" value="0" style="border:1px solid #f0d27a;color:#7d6608">
+      <span style="color:#7d6608" id="extPeLabel">t/h &nbsp; @ 1.44 MPa(a)</span>
+    </div>
+  </div>
+</div>
+
+<div class="results" id="results"></div>
+<div class="footer" id="footer"></div>
+
+<script>
+// === TURBINE MODEL ===
+// N57/C48-8.83/1.44 by Nanjing Turbine
+// P_gen = k_hp × D0 + k_lp × D_condenser + Pe_correction
+// k_hp = 91.91 kW/(t/h), k_lp = 230.48 kW/(t/h) at Pe=1.44 MPa(a)
+// Internal bleeds ≈ 27.3% of D0 (HP heaters + deaerator + LP heaters + gland seal)
+// Pe correction: ΔP = -De × 0.13 × (Pe - 1.44)
+
+const K_HP = 0.09191;  // MW per t/h
+const K_LP = 0.23048;  // MW per t/h
+const BLEED_RATIO = 0.273;  // internal bleeds as fraction of D0
+const PE_CORR = 0.13;  // MW correction per t/h extraction per 1 MPa Pe change
+const PE_BASE = 1.44;
+
+const TH_MAX = 240;  // VWO
+const TH_DESIGN = 220;
+const TH_MIN = 80;
+const P_MAX = 57.21;  // condensing rated
+const EXT_MAX = 95;
+
+let throttle = 220, extraction = 0, pe = 1.44;
+
+// Condition data from Nanjing document (all at Pe=1.44)
+const CONDS = [
+  {id:1,label:"THA",th:220,ext:38,gMW:48.47,exh:122.049,col:"#c0392b",desc:"THA rated condition"},
+  {id:2,label:"Cond",th:220,ext:0,gMW:57.21,exh:160.491,col:"#2c3e50",desc:"Condensing rated (no extraction)"},
+  {id:3,label:"VWO",th:240,ext:38,gMW:54.09,exh:136.786,col:"#8e44ad",desc:"VWO (valve wide open)"},
+  {id:4,label:"Ext50",th:220,ext:50,gMW:45.66,exh:109.966,col:"#d35400",desc:"50 t/h extraction"},
+  {id:5,label:"Ext75",th:220,ext:75,gMW:39.88,exh:84.879,col:"#27ae60",desc:"75 t/h extraction"},
+  {id:6,label:"Ext95",th:220,ext:95,gMW:35.18,exh:64.909,col:"#2980b9",desc:"95 t/h extraction (max)"},
+  {id:7,label:"75%C",th:163,ext:0,gMW:42.80,exh:121.021,col:"#7f8c8d",desc:"75% condensing"},
+  {id:8,label:"40%C",th:91,ext:0,gMW:22.86,exh:70.687,col:"#95a5a6",desc:"40% condensing"},
+];
+
+function calcCondenser(d0, ext) {
+  return d0 * (1 - BLEED_RATIO) - ext;
+}
+
+function calcPower(d0, ext, peVal) {
+  const dCond = Math.max(calcCondenser(d0, ext), 5);
+  const basePower = K_HP * d0 + K_LP * dCond;
+  const peCorr = -ext * PE_CORR * (peVal - PE_BASE);
+  return Math.min(P_MAX, Math.max(0, basePower + peCorr));
+}
+
+function maxExt(d0) {
+  const maxByFlow = d0 * (1 - BLEED_RATIO) - 5;
+  return Math.min(Math.max(0, Math.round(maxByFlow)), EXT_MAX);
+}
+
+// Chart dimensions
+const M={top:38,right:40,bottom:58,left:70},W=880,H=520;
+const pw=W-M.left-M.right,ph=H-M.top-M.bottom;
+const xMin=0,xMax=62,yMin=60,yMax=260;
+function px(v){return M.left+(v-xMin)/(xMax-xMin)*pw}
+function py(v){return M.top+(1-(v-yMin)/(yMax-yMin))*ph}
+
+function buildStatic(){
+  let s='';
+  const peStr = pe.toFixed(2);
+  s+=`<text x="${W/2}" y="20" text-anchor="middle" font-size="13" font-weight="600" fill="#222" font-family="inherit">N57/C48 extraction condensing turbine — steam map @ Pe = ${peStr} MPa(a)</text>`;
+  s+=`<text x="${W/2}" y="33" text-anchor="middle" font-size="9" fill="#999" font-family="inherit">Inlet: 8.83 MPa(a) / 535°C | Supply after DSH: 1.27 MPa(a) / 210°C | Max D₀: 240 t/h (VWO) | Design: 220 t/h</text>`;
+
+  // Grid
+  const xT=[0,5,10,15,20,25,30,35,40,45,50,55,60];
+  const yT=[60,80,100,120,140,160,180,200,220,240,260];
+  xT.forEach(v=>{s+=`<line x1="${px(v)}" y1="${py(yMax)}" x2="${px(v)}" y2="${py(yMin)}" stroke="#e8e8e4" stroke-width="0.4"/>`});
+  yT.forEach(v=>{s+=`<line x1="${px(xMin)}" y1="${py(v)}" x2="${px(xMax)}" y2="${py(v)}" stroke="#e8e8e4" stroke-width="0.4"/>`});
+  xT.filter(v=>v%10===0||v===5||v===55).forEach(v=>{s+=`<text x="${px(v)}" y="${H-26}" text-anchor="middle" font-size="10" fill="#888" font-family="inherit">${v}</text>`});
+  yT.forEach(v=>{s+=`<text x="${M.left-8}" y="${py(v)+4}" text-anchor="end" font-size="10" fill="#888" font-family="inherit">${v}</text>`});
+  s+=`<text x="${W/2}" y="${H-6}" text-anchor="middle" font-size="12" font-weight="500" fill="#222" font-family="inherit">Generator power Nₑ (MW)</text>`;
+  s+=`<text x="16" y="${H/2}" text-anchor="middle" font-size="12" font-weight="500" fill="#222" font-family="inherit" transform="rotate(-90,16,${H/2})">Inlet steam flow D₀ (t/h)</text>`;
+
+  // Envelope
+  const tp=pts=>pts.map((p,i)=>`${i?'L':'M'}${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ');
+
+  // P=0 line (condensing, no extraction)
+  let p0=[];
+  for(let th=TH_MIN;th<=TH_MAX;th+=2){let g=calcPower(th,0,pe);if(g<=P_MAX)p0.push({x:g,y:th})}
+
+  // LP=0 line (max extraction)
+  let lp0=[];
+  for(let th=TH_MIN;th<=TH_MAX;th+=2){let me=maxExt(th);lp0.push({x:calcPower(th,me,pe),y:th})}
+
+  // Fill
+  if(p0.length>0&&lp0.length>0){
+    let fillD=tp(lp0)+` L${px(Math.min(calcPower(TH_MAX,0,pe),P_MAX)).toFixed(1)},${py(TH_MAX).toFixed(1)}`+p0.slice().reverse().map(p=>` L${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join('')+' Z';
+    s+=`<path d="${fillD}" fill="rgba(41,128,185,0.05)" stroke="none"/>`;
+  }
+
+  // Extraction lines
+  const extLines=[0,10,20,38,50,75,95];
+  extLines.forEach(ext=>{
+    let pts=[];
+    for(let th=TH_MIN;th<=TH_MAX;th+=2){
+      if(ext>maxExt(th))continue;
+      let g=calcPower(th,ext,pe);if(g<=P_MAX)pts.push({x:g,y:th});
+    }
+    if(pts.length>1){
+      const isZero=ext===0;
+      const col=isZero?"#2980b9":"#ccc";
+      s+=`<path d="${tp(pts)}" fill="none" stroke="${col}" stroke-width="${isZero?1.8:0.7}" stroke-dasharray="${isZero?'none':'4,3'}"/>`;
+      if(ext>0&&pts.length>0) s+=`<text x="${px(pts[0].x)-2}" y="${py(pts[0].y)+11}" font-size="8" fill="#bbb" font-family="inherit" text-anchor="end">De=${ext}</text>`;
+    }
+  });
+
+  // Label P=0
+  if(p0.length>4){let i=Math.floor(p0.length*0.6);s+=`<text x="${px(p0[i].x)+6}" y="${py(p0[i].y)-5}" font-size="9" font-weight="500" fill="#2980b9" font-family="inherit">Condensing line (De=0)</text>`}
+
+  // HP=1 (max throttle 240 VWO)
+  s+=`<line x1="${px(calcPower(TH_MAX,maxExt(TH_MAX),pe))}" y1="${py(TH_MAX)}" x2="${px(Math.min(calcPower(TH_MAX,0,pe),P_MAX))}" y2="${py(TH_MAX)}" stroke="#c0392b" stroke-width="2.5"/>`;
+  s+=`<text x="${px(calcPower(TH_MAX,40,pe))}" y="${py(TH_MAX)-6}" text-anchor="middle" font-size="9" font-weight="600" fill="#c0392b" font-family="inherit">HP=1  VWO 240 t/h</text>`;
+
+  // Design 220 line
+  s+=`<line x1="${px(calcPower(220,maxExt(220),pe))}" y1="${py(220)}" x2="${px(Math.min(calcPower(220,0,pe),P_MAX))}" y2="${py(220)}" stroke="#2c3e50" stroke-width="1.2" stroke-dasharray="6,3"/>`;
+  s+=`<text x="${px(calcPower(220,50,pe))}" y="${py(220)+13}" text-anchor="middle" font-size="8" fill="#2c3e50" font-family="inherit">Design D₀ = 220 t/h</text>`;
+
+  // LP=0
+  s+=`<path d="${tp(lp0)}" fill="none" stroke="#e67e22" stroke-width="2.5"/>`;
+  if(lp0.length>8){
+    let i=8,p=lp0[i],p2=lp0[i+4]||p;
+    let ang=Math.atan2(py(p2.y)-py(p.y),px(p2.x)-px(p.x))*180/Math.PI;
+    s+=`<text x="${px(p.x)}" y="${py(p.y)-8}" font-size="9" font-weight="500" fill="#e67e22" font-family="inherit" transform="rotate(${ang.toFixed(1)},${px(p.x)},${py(p.y)-8})">LP=0  max extraction</text>`;
+  }
+
+  // S=max
+  s+=`<line x1="${px(P_MAX)}" y1="${py(TH_MAX)}" x2="${px(P_MAX)}" y2="${py(yMin)}" stroke="#c0392b" stroke-width="1.2" stroke-dasharray="6,3"/>`;
+  s+=`<text x="${px(P_MAX)+3}" y="${py(yMax)+14}" font-size="8" font-weight="500" fill="#c0392b" font-family="inherit">57.21 MW</text>`;
+
+  // S=min
+  s+=`<line x1="${px(calcPower(TH_MIN,maxExt(TH_MIN),pe))}" y1="${py(TH_MIN)}" x2="${px(Math.min(calcPower(TH_MIN,0,pe),P_MAX))}" y2="${py(TH_MIN)}" stroke="#7f8c8d" stroke-width="1" stroke-dasharray="5,3"/>`;
+  s+=`<text x="${px(calcPower(TH_MIN,10,pe))}" y="${py(TH_MIN)+13}" text-anchor="middle" font-size="8" fill="#7f8c8d" font-family="inherit">S=min  D₀=${TH_MIN} t/h</text>`;
+
+  s+=`<text x="${W-M.right-2}" y="${py(yMax)+14}" text-anchor="end" font-size="7" fill="#bbb" font-family="inherit" font-style="italic">De = extraction t/h</text>`;
+
+  // Condition points (dots only with ID number)
+  CONDS.forEach(c=>{
+    const cPow = (pe===PE_BASE) ? c.gMW : calcPower(c.th, c.ext, pe);
+    const cx=px(Math.min(cPow,P_MAX)),cy=py(c.th);
+    s+=`<circle cx="${cx}" cy="${cy}" r="6.5" fill="${c.col}" stroke="#fff" stroke-width="2"/>`;
+    s+=`<text x="${cx}" y="${cy+3.5}" text-anchor="middle" font-size="7" font-weight="700" fill="#fff" font-family="inherit">${c.id}</text>`;
+  });
+
+  return s;
+}
+
+// Legend
+function buildLegend(){
+  const el=document.getElementById("condLegend");
+  el.innerHTML='';
+  CONDS.forEach(c=>{
+    const cPow = (pe===PE_BASE) ? c.gMW : calcPower(c.th, c.ext, pe);
+    const dCond = calcCondenser(c.th, c.ext);
+    const item=document.createElement("div");
+    item.className="cond-item";
+    item.innerHTML=`<div class="cond-dot" style="background:${c.col}"></div>
+      <div><span class="cond-label" style="color:${c.col}">${c.id}. ${c.label}</span>
+      <span class="cond-detail">&nbsp;${cPow.toFixed(1)} MW | D₀=${c.th} | De=${c.ext} | Cond≈${dCond.toFixed(0)} t/h | ${c.desc}</span></div>`;
+    el.appendChild(item);
+  });
+}
+
+function render(){
+  const me=maxExt(throttle);
+  const ce=Math.min(extraction,me);
+  const gMW=calcPower(throttle,ce,pe);
+  const dCond=calcCondenser(throttle,ce);
+  const dBleeds=throttle*BLEED_RATIO;
+  const supplyDSH = ce > 0 ? ce * (42.06/38) : 0; // approximate DSH supply ratio from THA
+  const extRatio=throttle>0?(ce/throttle*100):0;
+
+  const cpx=px(Math.min(gMW,P_MAX)),cpy=py(throttle);
+  const lblRight=cpx+155<W;
+  const lx=lblRight?cpx+14:cpx-155;
+
+  let dyn='';
+  dyn+=`<line x1="${cpx}" y1="${py(yMax)}" x2="${cpx}" y2="${py(yMin)}" stroke="#c0392b" stroke-width="0.4" stroke-dasharray="3,3" opacity="0.4"/>`;
+  dyn+=`<line x1="${px(xMin)}" y1="${cpy}" x2="${px(xMax)}" y2="${cpy}" stroke="#c0392b" stroke-width="0.4" stroke-dasharray="3,3" opacity="0.4"/>`;
+  dyn+=`<circle cx="${cpx}" cy="${cpy}" r="9" fill="none" stroke="#c0392b" stroke-width="2"/>`;
+  dyn+=`<circle cx="${cpx}" cy="${cpy}" r="3" fill="#c0392b"/>`;
+
+  dyn+=`<rect x="${lx}" y="${cpy-42}" width="150" height="62" rx="4" fill="#fff" stroke="#c0392b" stroke-width="1" opacity="0.95"/>`;
+  dyn+=`<text x="${lx+8}" y="${cpy-26}" font-size="12" font-weight="700" fill="#c0392b" font-family="inherit">${gMW.toFixed(2)} MW</text>`;
+  dyn+=`<text x="${lx+8}" y="${cpy-12}" font-size="9" fill="#888" font-family="inherit">Ext: ${ce.toFixed(0)} t/h @ ${pe.toFixed(2)} MPa</text>`;
+  dyn+=`<text x="${lx+8}" y="${cpy+2}" font-size="9" fill="#888" font-family="inherit">Cond: ${dCond.toFixed(1)} t/h</text>`;
+  dyn+=`<text x="${lx+8}" y="${cpy+14}" font-size="9" fill="#888" font-family="inherit">Bleeds: ${dBleeds.toFixed(1)} t/h</text>`;
+
+  document.getElementById("chart").innerHTML=buildStatic()+dyn;
+
+  document.getElementById("extSlider").max=me;
+  document.getElementById("extNum").max=me;
+  document.getElementById("extLabel").textContent=`Industrial extraction Dₑ (max ${me} t/h)`;
+  document.getElementById("extPeLabel").textContent=`t/h  @ ${pe.toFixed(2)} MPa(a)`;
+
+  const cards=[
+    {l:"Generator power",v:gMW.toFixed(2),u:"MW",c:"#c0392b"},
+    {l:"Extraction Dₑ",v:ce.toFixed(0),u:"t/h",s:`@ Pe=${pe.toFixed(2)} MPa(a)`,c:"#e67e22"},
+    {l:"Condenser flow",v:dCond.toFixed(1),u:"t/h",s:`${(dCond/throttle*100).toFixed(1)}% of D₀`,c:"#2980b9"},
+    {l:"Internal bleeds",v:dBleeds.toFixed(1),u:"t/h",s:`HP+Dea+LP heaters+seal`,c:"#7f8c8d"},
+    {l:"Supply after DSH",v:ce>0?supplyDSH.toFixed(1):"0",u:"t/h",s:"1.27 MPa(a) / 210°C",c:"#27ae60"},
+    {l:"Throttle D₀",v:String(throttle),u:"t/h",s:"8.83 MPa(a) / 535°C",c:"#2c3e50"},
+  ];
+  document.getElementById("results").innerHTML=cards.map(c=>`
+    <div class="res-card" style="border-left:3px solid ${c.c}">
+      <div class="lbl">${c.l}</div>
+      <div class="val" style="color:${c.c}">${c.v}<span> ${c.u}</span></div>
+      ${c.s?`<div class="sub">${c.s}</div>`:''}
+    </div>`).join('');
+
+  document.getElementById("footer").innerHTML=
+    `Model: P = D₀ × ${(K_HP*1000).toFixed(1)} + D<sub>cond</sub> × ${(K_LP*1000).toFixed(1)} kW/(t/h) + Pe correction | `+
+    `D<sub>cond</sub> = D₀ × ${(1-BLEED_RATIO).toFixed(3)} − Dₑ | `+
+    `Pe corr: ΔP = −Dₑ × ${PE_CORR} × (Pe − ${PE_BASE}) | `+
+    `Source: Nanjing Turbine Z58808.34/02 | Drag on chart to explore`;
+
+  document.querySelectorAll('.presets button').forEach((btn,i)=>{
+    const c=CONDS[i];
+    const active=Math.abs(extraction-c.ext)<0.5&&throttle===c.th;
+    btn.style.background=active?c.col:'#f0efea';
+    btn.style.color=active?'#fff':'#666';
+    btn.style.borderColor=c.col;
+  });
+}
+
+// Pe tabs
+function setPe(val){
+  pe=val;
+  document.querySelectorAll('.pe-tabs button').forEach(b=>{
+    b.className=parseFloat(b.textContent.match(/[\d.]+/)[0])===pe?'active':'';
+  });
+  buildLegend();
+  render();
+}
+
+// Presets
+const presetsEl=document.getElementById("presets");
+CONDS.forEach(c=>{
+  const btn=document.createElement("button");
+  btn.innerHTML=`<b>${c.id}.${c.label}</b> ${c.gMW}MW | De=${c.ext}`;
+  btn.style.borderColor=c.col;
+  btn.onclick=()=>{
+    throttle=c.th;extraction=c.ext;pe=PE_BASE;
+    document.getElementById("throttleSlider").value=throttle;
+    document.getElementById("throttleNum").value=throttle;
+    document.getElementById("extSlider").value=extraction;
+    document.getElementById("extNum").value=Math.round(extraction);
+    document.querySelectorAll('.pe-tabs button').forEach(b=>{b.className=b.textContent.includes('1.44')?'active':''});
+    buildLegend();render();
+  };
+  presetsEl.appendChild(btn);
+});
+
+function syncThrottle(v){
+  throttle=Math.max(TH_MIN,Math.min(TH_MAX,Math.round(v)));
+  if(extraction>maxExt(throttle)){extraction=maxExt(throttle);document.getElementById("extSlider").value=extraction;document.getElementById("extNum").value=Math.round(extraction)}
+  document.getElementById("throttleSlider").value=throttle;
+  document.getElementById("throttleNum").value=throttle;
+  render();
+}
+function syncExtraction(v){
+  extraction=Math.max(0,Math.min(maxExt(throttle),Math.round(v)));
+  document.getElementById("extSlider").value=extraction;
+  document.getElementById("extNum").value=Math.round(extraction);
+  render();
+}
+document.getElementById("throttleSlider").oninput=e=>syncThrottle(e.target.value);
+document.getElementById("throttleNum").onchange=e=>syncThrottle(e.target.value);
+document.getElementById("extSlider").oninput=e=>syncExtraction(e.target.value);
+document.getElementById("extNum").onchange=e=>syncExtraction(e.target.value);
+
+let dragging=false;
+const svg=document.getElementById("chart");
+svg.onmousedown=()=>{dragging=true};
+svg.onmouseup=()=>{dragging=false};
+svg.onmouseleave=()=>{dragging=false};
+svg.onmousemove=e=>{
+  if(!dragging)return;
+  const rect=svg.getBoundingClientRect();
+  const mx=(e.clientX-rect.left)*(W/rect.width);
+  const my=(e.clientY-rect.top)*(H/rect.height);
+  const mw=xMin+(mx-M.left)/pw*(xMax-xMin);
+  const th=yMax-(my-M.top)/ph*(yMax-yMin);
+  if(mw>=xMin&&mw<=xMax&&th>=yMin&&th<=yMax){
+    const clTh=Math.max(TH_MIN,Math.min(TH_MAX,Math.round(th)));
+    const dCond0=calcCondenser(clTh,0);
+    const neededExt=Math.max(0, (K_HP*clTh + K_LP*dCond0 - mw) / (K_LP + PE_CORR*(pe-PE_BASE)) );
+    throttle=clTh;
+    extraction=Math.max(0,Math.min(maxExt(clTh),Math.round(neededExt)));
+    document.getElementById("throttleSlider").value=throttle;
+    document.getElementById("throttleNum").value=throttle;
+    document.getElementById("extSlider").value=extraction;
+    document.getElementById("extNum").value=Math.round(extraction);
+    render();
+  }
+};
+svg.ontouchstart=e=>{dragging=true;e.preventDefault()};
+svg.ontouchend=()=>{dragging=false};
+svg.ontouchmove=e=>{
+  if(!dragging)return;e.preventDefault();
+  const t=e.touches[0],rect=svg.getBoundingClientRect();
+  const mx=(t.clientX-rect.left)*(W/rect.width);
+  const my=(t.clientY-rect.top)*(H/rect.height);
+  const mw=xMin+(mx-M.left)/pw*(xMax-xMin);
+  const th=yMax-(my-M.top)/ph*(yMax-yMin);
+  if(mw>=xMin&&mw<=xMax&&th>=yMin&&th<=yMax){
+    const clTh=Math.max(TH_MIN,Math.min(TH_MAX,Math.round(th)));
+    const dCond0=calcCondenser(clTh,0);
+    const neededExt=Math.max(0,(K_HP*clTh+K_LP*dCond0-mw)/(K_LP+PE_CORR*(pe-PE_BASE)));
+    throttle=clTh;extraction=Math.max(0,Math.min(maxExt(clTh),Math.round(neededExt)));
+    document.getElementById("throttleSlider").value=throttle;document.getElementById("throttleNum").value=throttle;
+    document.getElementById("extSlider").value=extraction;document.getElementById("extNum").value=Math.round(extraction);
+    render();
+  }
+};
+
+buildLegend();
+render();
+</script>
+</body>
+</html>
